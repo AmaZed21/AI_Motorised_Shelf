@@ -13,20 +13,6 @@ This project is a modular Python simulation of a voice-activated motorized shelf
 - CSV logging of system state over time
 - Streamlit dashboard via `stream_app.py`
 
-
-## Project Structure
-
-motorized-shelf/
-├── simulator.py # All classes: Compartment, Shelf, Voice, Logger
-├── stream_app.py # Streamlit dashboard
-├── data/
-│ └── logs.csv # Runtime CSV logs
-├── models/ # Place downloaded Vosk model here (git-ignored)
-├── .gitignore
-├── requirements.txt
-└── README.md
-
-
 ## Requirements
 
 Install all dependencies with:
