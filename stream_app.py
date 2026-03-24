@@ -12,7 +12,7 @@ if 'shelf' not in st.session_state:
     com_2 = Compartment(2, weight=0.4, contents=['towel'])
     com_3 = Compartment(3)
     st.session_state.shelf = Shelf([com_1, com_2, com_3])
-    st.session_state.logger = Logger('run_1.csv')
+    st.session_state.logger = Logger('data/logs.csv')
 
 shelf  = st.session_state.shelf
 logger = st.session_state.logger
@@ -163,7 +163,7 @@ with col_ctrl:
 with col_log:
     st.subheader("Event Log")
     try:
-        df = pd.read_csv('run_1.csv')
+        df = pd.read_csv('data/logs.csv')
         st.dataframe(df.tail(50).iloc[::-1], use_container_width=True, height=500)
     except FileNotFoundError:
         st.info("No logs yet.")

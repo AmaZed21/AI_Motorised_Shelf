@@ -2,10 +2,6 @@ import asyncio
 import csv
 from datetime import datetime
 import random
-import vosk
-import numpy
-import sounddevice as sd
-import queue
 
 #Defining directions
 DIR_NONE = "NONE"
@@ -175,29 +171,6 @@ class Logger:
                 'event_type': event_type
             })
 
-#Voice for commands
-class Voice:
-    def __init__(self, shelf, model_path, device = None, samplerate = None) -> None:
-        self.shelf = shelf
-        self.device = device
-        self.audio_queue = queue.Queue()
-        
-        if samplerate is None:
-            device_info = sd.query_devices(device = device, kind = "input")
-            samplerate = int(device_info["default_samplerate"]) #type: ignore
-
-        self.samplerate = samplerate
-        self.model = vosk.Model(model_path)
-        self.recognizer = vosk.KaldiRecognizer(self.model, self.samplerate)
-
-    def audio_callback(self, indata, frames, time_info, status):
-        if status:
-            print(status)
-        self.audio_queue.put(bytes(indata))
-
-    def normalize_text(self, text):
-        return text.lower().strip()
-
 
 #Execute commands
 async def process_command(shelf, com, command, logger):
@@ -286,7 +259,7 @@ async def auto_cycles(shelf, logger, cycles=50):
                 await asyncio.sleep(1)
 
 async def main():
-    logger = Logger('Logs_shelf.csv')
+    logger = Logger('data/logs.csv')
     
     #Creating compartments
     com_1 = Compartment(weight = 0.5, contents = ['inhaler', 'medicine'])
