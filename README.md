@@ -15,6 +15,7 @@ This project is a modular Python simulation of a voice-activated motorized shelf
 
 
 ## Project Structure
+
 motorized-shelf/
 ├── simulator.py # All classes: Compartment, Shelf, Voice, Logger
 ├── stream_app.py # Streamlit dashboard
