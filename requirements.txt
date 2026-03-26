@@ -1,6 +1,3 @@
 streamlit
 numpy
 pandas
-vosk
-sounddevice
-queue

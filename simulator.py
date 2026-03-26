@@ -2,11 +2,16 @@ import asyncio
 import csv
 from datetime import datetime
 import random
-import vosk
-import sounddevice as sd
 import numpy as np
-import queue
-import json
+
+try:
+    import vosk
+    import sounddevice as sd
+    import queue
+    import json
+    VOICE_AVAILABLE = True
+except ImportError:
+    VOICE_AVAILABLE = False
 
 #Defining directions
 DIR_NONE = "NONE"
@@ -182,17 +187,18 @@ class Logger:
 #Voice commands
 class Voice:
     def __init__(self, shelf, model_path, device=None, samplerate=None):
-        self.shelf = shelf
-        self.device = device
-        self.audio_queue = queue.Queue()
+        if VOICE_AVAILABLE:
+            self.shelf = shelf
+            self.device = device
+            self.audio_queue = queue.Queue()
 
-        if samplerate is None:
-            device_info = sd.query_devices(device, "input")
-            samplerate = int(device_info["default_samplerate"]) #type: ignore
+            if samplerate is None:
+                device_info = sd.query_devices(device, "input")
+                samplerate = int(device_info["default_samplerate"]) #type: ignore
 
-        self.samplerate = samplerate
-        self.model = vosk.Model(model_path)
-        self.recognizer = vosk.KaldiRecognizer(self.model, self.samplerate)
+            self.samplerate = samplerate
+            self.model = vosk.Model(model_path)
+            self.recognizer = vosk.KaldiRecognizer(self.model, self.samplerate)
 
     def audio_callback(self, indata, frames, time_info, status):
         if status:
@@ -233,20 +239,21 @@ class Voice:
             comp.move_down()
     
     def listen_loop(self):
-        with sd.RawInputStream(
-            samplerate=self.samplerate,
-            blocksize=8000,
-            device=self.device,
-            dtype="int16",
-            channels=1,
-            callback=self.audio_callback
-        ):
-            while True:
-                data = self.audio_queue.get()
-                if self.recognizer.AcceptWaveform(data):
-                    result = json.loads(self.recognizer.Result())
-                    text = result.get("text", "")
-                    self.handle_command(text)
+        if VOICE_AVAILABLE:
+            with sd.RawInputStream(
+                samplerate=self.samplerate,
+                blocksize=8000,
+                device=self.device,
+                dtype="int16",
+                channels=1,
+                callback=self.audio_callback
+            ):
+                while True:
+                    data = self.audio_queue.get()
+                    if self.recognizer.AcceptWaveform(data):
+                        result = json.loads(self.recognizer.Result())
+                        text = result.get("text", "")
+                        self.handle_command(text)
 
 #Execute commands
 async def process_command(shelf, com, command, logger):
