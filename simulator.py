@@ -2,6 +2,11 @@ import asyncio
 import csv
 from datetime import datetime
 import random
+import vosk
+import sounddevice as sd
+import numpy as np
+import queue
+import json
 
 #Defining directions
 DIR_NONE = "NONE"
@@ -140,13 +145,16 @@ class Shelf:
         print('Successfully reset')
     
     def find_item(self, item):
-        item = item.lower().strip()
+        try:
+            item = item.lower().strip()
 
-        for compartment in self.total_com:
-            normalized_contents = [x.lower().strip() for x in compartment.contents]
+            for com in self.total_com:
+                normalized_contents = [x.lower().strip() for x in com.contents]
 
-            if item in normalized_contents:
-                return compartment
+                if item in normalized_contents:
+                    return com
+        except AttributeError:
+            return
 
 #Event logging
 class Logger:
@@ -171,6 +179,74 @@ class Logger:
                 'event_type': event_type
             })
 
+#Voice commands
+class Voice:
+    def __init__(self, shelf, model_path, device=None, samplerate=None):
+        self.shelf = shelf
+        self.device = device
+        self.audio_queue = queue.Queue()
+
+        if samplerate is None:
+            device_info = sd.query_devices(device, "input")
+            samplerate = int(device_info["default_samplerate"]) #type: ignore
+
+        self.samplerate = samplerate
+        self.model = vosk.Model(model_path)
+        self.recognizer = vosk.KaldiRecognizer(self.model, self.samplerate)
+
+    def audio_callback(self, indata, frames, time_info, status):
+        if status:
+            print(status)
+        self.audio_queue.put(bytes(indata))
+
+    def normalize_text(self, text):
+        return text.lower().strip()
+
+    def extract_item(self, text):
+        text = self.normalize_text(text)
+        if text == 'stop':
+            return 'STOP'
+        elif text.startswith("bring "):
+            item = text[len("bring "):].strip()
+            if item:
+                return item
+        return None
+
+    def handle_command(self, text):
+        text = self.normalize_text(text)
+        if not text:
+            return
+        print(f"Detected speech: {text}")
+        item = self.extract_item(text)
+
+        if item is None:
+            return
+
+        if item == "STOP":
+            self.shelf.emergency_stop()
+            print("All movement stopped.")
+            return
+        
+        comp = self.shelf.find_item(item)
+
+        if comp is not None:
+            comp.move_down()
+    
+    def listen_loop(self):
+        with sd.RawInputStream(
+            samplerate=self.samplerate,
+            blocksize=8000,
+            device=self.device,
+            dtype="int16",
+            channels=1,
+            callback=self.audio_callback
+        ):
+            while True:
+                data = self.audio_queue.get()
+                if self.recognizer.AcceptWaveform(data):
+                    result = json.loads(self.recognizer.Result())
+                    text = result.get("text", "")
+                    self.handle_command(text)
 
 #Execute commands
 async def process_command(shelf, com, command, logger):
@@ -262,16 +338,21 @@ async def main():
     logger = Logger('data/logs.csv')
     
     #Creating compartments
-    com_1 = Compartment(weight = 0.5, contents = ['inhaler', 'medicine'])
-    com_2 = Compartment(2, weight = 1.3, contents=['dumbell'])
-    com_3 = Compartment(3)
+    com_1 = Compartment()
+    com_2 = Compartment(2, weight = 0.2, contents=['towel'])
+    com_3 = Compartment(3, weight = 0.5, contents = ['inhaler', 'medicine'])
     
     #Creating shelf
     shelf_1 = Shelf([com_1, com_2, com_3])
-    
+
+    voice = Voice(shelf_1, model_path = 'models/vosk-model-small-en-us-0.15')
+
+    loop = asyncio.get_running_loop()
+
     await asyncio.gather(
             run_simulation(shelf_1, logger),
-            auto_cycles(shelf_1, logger)
+            manual_cycle(shelf_1, logger),
+            loop.run_in_executor(None, voice.listen_loop)
         )
 
 if __name__ == '__main__':
