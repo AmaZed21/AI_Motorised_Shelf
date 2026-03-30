@@ -7,9 +7,6 @@ from streamlit_webrtc import webrtc_streamer, WebRtcMode #type: ignore
 import av
 import vosk
 import json
-import os
-import zipfile
-import urllib.request
 
 st.set_page_config(page_title="Shelf Control", layout="wide")
 st.title("Motorised Shelf Dashboard")
@@ -21,21 +18,6 @@ if 'shelf' not in st.session_state:
     st.session_state.shelf = Shelf([com_1, com_2, com_3])
     st.session_state.logger = Logger('data/logs.csv')
     st.session_state.last_command = ""
-
-def ensure_model():
-    model_path = "models/vosk-model-small-en-us-0.15"
-    if not os.path.exists(model_path):
-        os.makedirs("models", exist_ok=True)
-        zip_path = "models/vosk-model.zip"
-        url = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
-        with st.spinner("Downloading voice model..."):
-            urllib.request.urlretrieve(url, zip_path)
-            with zipfile.ZipFile(zip_path, 'r') as z:
-                z.extractall("models/")
-            os.remove(zip_path)
-
-if VOICE_AVAILABLE:
-    ensure_model()
 
 shelf  = st.session_state.shelf
 logger = st.session_state.logger
