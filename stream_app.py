@@ -21,7 +21,6 @@ if 'shelf' not in st.session_state:
     st.session_state.shelf = Shelf([com_1, com_2, com_3])
     st.session_state.logger = Logger('data/logs.csv')
     st.session_state.last_command = ""
-    st.session_state.command_queue = []
 
 def ensure_model():
     model_path = "models/vosk-model-small-en-us-0.15"
@@ -194,7 +193,11 @@ with col_ctrl:
             st.session_state.recognizer = vosk.KaldiRecognizer(model, 16000)
 
         recognizer = st.session_state.recognizer
-        voice = Voice(shelf, "models/vosk-model-small-en-us-0.15")
+
+        def on_command(text):
+            st.session_state.last_command = text
+
+        voice = Voice(shelf, "models/vosk-model-small-en-us-0.15", on_command=on_command)
 
         def audio_frame_callback(frame: av.AudioFrame):
             raw = bytes(frame.to_ndarray().tobytes())
@@ -202,24 +205,16 @@ with col_ctrl:
                 result = json.loads(recognizer.Result())
                 text = result.get("text", "")
                 if text:
-                    st.session_state.command_queue.append(text)  # thread-safe append
+                    voice.handle_command(text)
             return frame
-
-        # Drain queue in main thread
-        while st.session_state.command_queue:
-            text = st.session_state.command_queue.pop(0)
-            st.session_state.last_command = text
-            voice.handle_command(text)
 
         webrtc_streamer(
             key="voice",
             mode=WebRtcMode.SENDONLY,
-            rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]},
-                                              {"urls": ["stun:stun1.l.google.com:19302"]},
-                                              {"urls": ["stun:stun2.l.google.com:19302"]},]},
+            rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
             media_stream_constraints={"audio": True, "video": False},
             audio_frame_callback=audio_frame_callback,
-            async_processing=True
+            async_processing = True
         )
 
         st.info(f"Last heard: **{st.session_state.get('last_command', '—')}**")
