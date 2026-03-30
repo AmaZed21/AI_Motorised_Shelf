@@ -8,8 +8,8 @@ st.set_page_config(page_title="Shelf Control", layout="wide")
 st.title("Motorised Shelf Dashboard")
 
 if 'shelf' not in st.session_state:
-    com_1 = Compartment(1, weight=0.5, contents=['inhaler', 'medicine'])
-    com_2 = Compartment(2, weight=0.4, contents=['towel'])
+    com_1 = Compartment(1, weight=0.5)
+    com_2 = Compartment(2, weight=0.4)
     com_3 = Compartment(3)
     st.session_state.shelf = Shelf([com_1, com_2, com_3])
     st.session_state.logger = Logger('data/logs.csv')
@@ -167,6 +167,32 @@ with col_log:
         st.dataframe(df.tail(50).iloc[::-1], use_container_width=True, height=500)
     except FileNotFoundError:
         st.info("No logs yet.")
+
+# Contents Editor
+st.divider()
+st.subheader("Compartment Contents")
+
+content_cols = st.columns(len(shelf.total_com), gap="small")
+
+for i, com in enumerate(shelf.total_com):
+    with content_cols[i]:
+        is_moving = com.state in (STATE_MOVING_UP, STATE_MOVING_DOWN)
+
+        current_contents = ", ".join(com.contents) if com.contents else ""
+
+        new_val = st.text_input(
+            label=f"Compartment {com.com_no}",
+            value=current_contents,
+            key=f"contents_input_{com.com_no}",
+            disabled=is_moving,
+            placeholder="e.g. towel, bottle",
+        )
+
+        if not is_moving:
+            parsed = [item.strip().lower() for item in new_val.split(",") if item.strip()]
+            if parsed != com.contents:
+                com.contents = parsed
+                logger.log(com, f'CONTENTS_UPDATED: {parsed}')
 
 time.sleep(0.1)
 st.rerun()
