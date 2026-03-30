@@ -10,6 +10,7 @@ import json
 import os
 import zipfile
 import urllib.request
+import queue as q
 
 st.set_page_config(page_title="Shelf Control", layout="wide")
 st.title("Motorised Shelf Dashboard")
@@ -33,7 +34,7 @@ if 'shelf' not in st.session_state:
     st.session_state.shelf = Shelf([com_1, com_2, com_3])
     st.session_state.logger = Logger('data/logs.csv')
     st.session_state.last_command = ""
-    st.session_state.command_queue = []
+    st.session_state.command_queue = q.Queue()
 
     if VOICE_AVAILABLE:
         ensure_model()
@@ -202,8 +203,8 @@ with col_ctrl:
                     st.session_state.command_queue.append(text) 
             return frame
 
-        while st.session_state.command_queue:
-            text = st.session_state.command_queue.pop(0)
+        while not st.session_state.command_queue.empty():
+            text = st.session_state.command_queue.get()
             st.session_state.last_command = text
             voice.handle_command(text)
 
