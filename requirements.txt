@@ -1,3 +1,6 @@
 streamlit
 numpy
 pandas
+streamlit-webrtc
+av
+vosk

@@ -6,9 +6,7 @@ import numpy as np
 
 try:
     import vosk
-    import sounddevice as sd
     import queue
-    import json
     VOICE_AVAILABLE = True
 except ImportError:
     VOICE_AVAILABLE = False
@@ -186,24 +184,13 @@ class Logger:
 
 #Voice commands
 class Voice:
-    def __init__(self, shelf, model_path, device=None, samplerate=None):
+    def __init__(self, shelf, model_path, on_command=None):
+        self.shelf = shelf
+        self.on_command = on_command
         if VOICE_AVAILABLE:
-            self.shelf = shelf
-            self.device = device
             self.audio_queue = queue.Queue()
-
-            if samplerate is None:
-                device_info = sd.query_devices(device, "input")
-                samplerate = int(device_info["default_samplerate"]) #type: ignore
-
-            self.samplerate = samplerate
             self.model = vosk.Model(model_path)
-            self.recognizer = vosk.KaldiRecognizer(self.model, self.samplerate)
-
-    def audio_callback(self, indata, frames, time_info, status):
-        if status:
-            print(status)
-        self.audio_queue.put(bytes(indata))
+            self.recognizer = vosk.KaldiRecognizer(self.model, 16000)
 
     def normalize_text(self, text):
         return text.lower().strip()
@@ -231,60 +218,44 @@ class Voice:
         if not text:
             return
         print(f"Detected speech: {text}")
-        result = self.extract_item(text)
+        if self.on_command:
+            self.on_command(text)
 
+        result = self.extract_item(text)
         if result is None:
             return
 
         action, item = result
 
         if action == 'stop':
-            if item is None:
+            if item == 'all':
                 self.shelf.emergency_stop()
                 print("All movement stopped.")
             else:
-                com = self.shelf.find_item(item)
-                if com:
-                    com.stop()
+                comp = self.shelf.find_item(item)
+                if comp:
+                    comp.stop()
                     print(f"Stopped compartment with {item}.")
             return
 
         if action == 'bring':
-            com = self.shelf.find_item(item)
-            if com:
-                com.move_down()
+            comp = self.shelf.find_item(item)
+            if comp:
+                comp.move_down()
                 print(f"Bringing {item}.")
             return
-        
+
         if action == 'retract':
             if item == 'empty':
                 for com in self.shelf.total_com:
                     if not com.contents:
                         com.move_up()
-            print("Retracting empty compartments.")
-        else:
-            comp = self.shelf.find_item(item)
-            if comp:
-                comp.move_up()
-                print(f"Retracting {item}.")
-
-    
-    def listen_loop(self):
-        if VOICE_AVAILABLE:
-            with sd.RawInputStream(
-                samplerate=self.samplerate,
-                blocksize=8000,
-                device=self.device,
-                dtype="int16",
-                channels=1,
-                callback=self.audio_callback
-            ):
-                while True:
-                    data = self.audio_queue.get()
-                    if self.recognizer.AcceptWaveform(data):
-                        result = json.loads(self.recognizer.Result())
-                        text = result.get("text", "")
-                        self.handle_command(text)
+                print("Retracting empty compartments.")
+            else:
+                comp = self.shelf.find_item(item)
+                if comp:
+                    comp.move_up()
+                    print(f"Retracting {item}.")
 
 #Execute commands
 async def process_command(shelf, com, command, logger):
@@ -389,8 +360,7 @@ async def main():
 
     await asyncio.gather(
             run_simulation(shelf_1, logger),
-            manual_cycle(shelf_1, logger),
-            loop.run_in_executor(None, voice.listen_loop)
+            manual_cycle(shelf_1, logger)
         )
 
 if __name__ == '__main__':
