@@ -210,12 +210,20 @@ class Voice:
 
     def extract_item(self, text):
         text = self.normalize_text(text)
-        if text == 'stop':
-            return 'STOP'
-        elif text.startswith("bring "):
-            item = text[len("bring "):].strip()
+        if text == 'stop all' or text == 'stop':
+            return ('stop', 'all')
+        elif text.startswith('stop '):
+            item = text[len('stop '):].strip()
             if item:
-                return item
+                return ('stop', item)
+        elif text.startswith('bring '):
+            item = text[len('bring '):].strip()
+            if item:
+                return ('bring', item)
+        elif text.startswith('retract '):
+            item = text[len('retract '):].strip()
+            if item:
+                return ('retract', item)
         return None
 
     def handle_command(self, text):
@@ -223,20 +231,43 @@ class Voice:
         if not text:
             return
         print(f"Detected speech: {text}")
-        item = self.extract_item(text)
+        result = self.extract_item(text)
 
-        if item is None:
+        if result is None:
             return
 
-        if item == "STOP":
-            self.shelf.emergency_stop()
-            print("All movement stopped.")
+        action, item = result
+
+        if action == 'stop':
+            if item is None:
+                self.shelf.emergency_stop()
+                print("All movement stopped.")
+            else:
+                com = self.shelf.find_item(item)
+                if com:
+                    com.stop()
+                    print(f"Stopped compartment with {item}.")
+            return
+
+        if action == 'bring':
+            com = self.shelf.find_item(item)
+            if com:
+                com.move_down()
+                print(f"Bringing {item}.")
             return
         
-        comp = self.shelf.find_item(item)
+        if action == 'retract':
+            if item == 'empty':
+                for com in self.shelf.total_com:
+                    if not com.contents:
+                        com.move_up()
+            print("Retracting empty compartments.")
+        else:
+            comp = self.shelf.find_item(item)
+            if comp:
+                comp.move_up()
+                print(f"Retracting {item}.")
 
-        if comp is not None:
-            comp.move_down()
     
     def listen_loop(self):
         if VOICE_AVAILABLE:
