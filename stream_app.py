@@ -1,12 +1,8 @@
 import streamlit as st
 import streamlit.components.v1 as components
-from simulator import Logger, Compartment, Shelf, Voice, STATE_STOPPED, STATE_MOVING_UP, STATE_MOVING_DOWN, VOICE_AVAILABLE
+from simulator import Logger, Compartment, Shelf, STATE_STOPPED, STATE_MOVING_UP, STATE_MOVING_DOWN
 import pandas as pd
 import time
-from streamlit_webrtc import webrtc_streamer, WebRtcMode #type: ignore
-import av
-import vosk
-import json
 
 st.set_page_config(page_title="Shelf Control", layout="wide")
 st.title("Motorised Shelf Dashboard")
@@ -17,7 +13,6 @@ if 'shelf' not in st.session_state:
     com_3 = Compartment(3)
     st.session_state.shelf = Shelf([com_1, com_2, com_3])
     st.session_state.logger = Logger('data/logs.csv')
-    st.session_state.last_command = ""
 
 shelf  = st.session_state.shelf
 logger = st.session_state.logger
@@ -163,43 +158,6 @@ with col_ctrl:
         shelf.reset()
         for c in shelf.total_com:
             logger.log(c, 'RESET')
-
-    st.divider()
-    st.subheader("Voice Control")
-
-    if not VOICE_AVAILABLE:
-        st.warning("Voice unavailable.")
-    else:
-        if 'recognizer' not in st.session_state:
-            model = vosk.Model("models/vosk-model-small-en-us-0.15")
-            st.session_state.recognizer = vosk.KaldiRecognizer(model, 16000)
-
-        recognizer = st.session_state.recognizer
-
-        def on_command(text):
-            st.session_state.last_command = text
-
-        voice = Voice(shelf, "models/vosk-model-small-en-us-0.15", on_command=on_command)
-
-        def audio_frame_callback(frame: av.AudioFrame):
-            raw = bytes(frame.to_ndarray().tobytes())
-            if recognizer.AcceptWaveform(raw):
-                result = json.loads(recognizer.Result())
-                text = result.get("text", "")
-                if text:
-                    voice.handle_command(text)
-            return frame
-
-        webrtc_streamer(
-            key="voice",
-            mode=WebRtcMode.SENDONLY,
-            rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
-            media_stream_constraints={"audio": True, "video": False},
-            audio_frame_callback=audio_frame_callback,
-        )
-
-        st.info(f"Last heard: **{st.session_state.get('last_command', '—')}**")
-        st.caption("`bring <item>` · `stop <item/all>` · `retract <item/empty>`")
 
 #Logs
 with col_log:

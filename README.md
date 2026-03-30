@@ -26,9 +26,8 @@ Dependencies:
 - `numpy`
 - `pandas`
 - `vosk`
-- `streamlit-webrtc`
+- `sounddevice`
 - `queue`
-- `av`
 
 
 ## Vosk Model Setup
