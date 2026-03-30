@@ -30,7 +30,7 @@ Dependencies:
 - `queue`
 
 
-## Vosk Model Setup
+## Vosk Model Setup (For backend simulation/NOT streamlit)
 
 1. Download a model from [https://alphacephei.com/vosk/models]
    - Recommended: `vosk-model-small-en-us-0.15` (40 MB, good for testing)

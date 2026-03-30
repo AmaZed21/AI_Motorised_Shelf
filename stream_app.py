@@ -185,7 +185,7 @@ for i, com in enumerate(shelf.total_com):
             value=current_contents,
             key=f"contents_input_{com.com_no}",
             disabled=is_moving,
-            placeholder="e.g. towel, bottle",
+            placeholder="items (separated using commas)",
         )
 
         if not is_moving:
