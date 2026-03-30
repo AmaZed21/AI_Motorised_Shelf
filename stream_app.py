@@ -27,11 +27,6 @@ def ensure_model():
                 z.extractall("models/")
             os.remove(zip_path)
 
-@st.cache_resource
-def load_vosk_model():
-    ensure_model()
-    return vosk.Model("models/vosk-model-small-en-us-0.15")
-
 if 'shelf' not in st.session_state:
     com_1 = Compartment(1, weight=0.5)
     com_2 = Compartment(2, weight=0.4)
@@ -42,7 +37,8 @@ if 'shelf' not in st.session_state:
     st.session_state.command_queue = q.Queue()
 
     if VOICE_AVAILABLE:
-        model = load_vosk_model()  # cached — only loads ONCE ever
+        ensure_model()
+        model = vosk.Model("models/vosk-model-small-en-us-0.15")
         st.session_state.recognizer = vosk.KaldiRecognizer(model, 16000)
 
 shelf  = st.session_state.shelf
