@@ -163,7 +163,7 @@ with col_ctrl:
 with col_log:
     st.subheader("Event Log")
     try:
-        df = pd.read_csv('data/logs.csv')
+        df = pd.read_csv('data/logs.csv', index_col = 'timestamp')
         st.dataframe(df.tail(50).iloc[::-1], use_container_width=True, height=500)
     except FileNotFoundError:
         st.info("No logs yet.")
