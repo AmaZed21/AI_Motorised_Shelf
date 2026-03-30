@@ -214,6 +214,7 @@ with col_ctrl:
             rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
             media_stream_constraints={"audio": True, "video": False},
             audio_frame_callback=audio_frame_callback,
+            async_processing = True
         )
 
         st.info(f"Last heard: **{st.session_state.get('last_command', '—')}**")
