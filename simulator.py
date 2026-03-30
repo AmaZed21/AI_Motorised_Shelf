@@ -210,12 +210,11 @@ class Voice:
 
     def extract_item(self, text):
         text = self.normalize_text(text)
-        if text == 'stop all' or text == 'stop':
-            return ('stop', 'all')
+        if text == 'stop':
+            return ('stop', None)
         elif text.startswith('stop '):
             item = text[len('stop '):].strip()
-            if item:
-                return ('stop', item)
+            return ('stop', item)
         elif text.startswith('bring '):
             item = text[len('bring '):].strip()
             if item:
@@ -257,16 +256,11 @@ class Voice:
             return
         
         if action == 'retract':
-            if item == 'empty':
-                for com in self.shelf.total_com:
-                    if not com.contents:
-                        com.move_up()
-            print("Retracting empty compartments.")
-        else:
-            comp = self.shelf.find_item(item)
-            if comp:
-                comp.move_up()
+            com = self.shelf.find_item(item)
+            if com:
+                com.move_up()
                 print(f"Retracting {item}.")
+            return
 
     
     def listen_loop(self):
@@ -376,9 +370,9 @@ async def main():
     logger = Logger('data/logs.csv')
     
     #Creating compartments
-    com_1 = Compartment()
-    com_2 = Compartment(2, weight = 0.2, contents=['towel'])
-    com_3 = Compartment(3, weight = 0.5, contents = ['inhaler', 'medicine'])
+    com_1 = Compartment(weight = 0.4, contents = ['inhaler'])
+    com_2 = Compartment(2, weight = 0.2, contents=['bottle'])
+    com_3 = Compartment(3, weight = 0.5, contents = ['keys', 'medicine'])
     
     #Creating shelf
     shelf_1 = Shelf([com_1, com_2, com_3])
