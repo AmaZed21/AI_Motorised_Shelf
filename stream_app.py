@@ -19,17 +19,15 @@ logger = st.session_state.logger
 
 shelf.update_all(0.1)
 
-#Compartment selection
-with st.sidebar:
-    st.subheader("Select Compartments")
-    for c in shelf.total_com:
-        label = f"Compartment {c.com_no} — {', '.join(c.contents) if c.contents else 'Empty'}"
-        st.checkbox(label, key=f"com_check_{c.com_no}")
+#Selection of cabinet
+for c in shelf.total_com:
+    if f"com_selected_{c.com_no}" not in st.session_state:
+        st.session_state[f"com_selected_{c.com_no}"] = False
 
-selected_coms = [c for c in shelf.total_com if st.session_state.get(f"com_check_{c.com_no}", False)]
+selected_coms = [c for c in shelf.total_com if st.session_state.get(f"com_selected_{c.com_no}", False)]
 
 #Graphics
-col_vis, col_ctrl, col_log = st.columns([5, 2, 5])
+col_vis, col_ctrl, col_log = st.columns([4, 2, 6])
 
 with col_vis:
     st.subheader("Cabinet View")
@@ -47,7 +45,7 @@ with col_vis:
                 STATE_MOVING_DOWN: "#ff0000",
             }.get(com.state, "#888888")
 
-            border = "#ffffff" if st.session_state.get(f"com_check_{com.com_no}", False) else "#444444"
+            border = "#ffffff" if st.session_state.get(f"com_selected_{com.com_no}", False) else "#444444"
 
             cabinet_html = f"""
             <html>
@@ -97,6 +95,12 @@ with col_vis:
             </html>
             """
             components.html(cabinet_html, height=320, width=90, scrolling=False)
+
+            is_selected = st.session_state.get(f"com_selected_{com.com_no}", False)
+            dot_color = "🟢" if is_selected else "🔴"
+            if st.button(f"{dot_color} {com.com_no}", key=f"btn_select_{com.com_no}", use_container_width=True):
+                st.session_state[f"com_selected_{com.com_no}"] = not is_selected
+                st.rerun()
 
             st.markdown(
                 f"<div style='text-align:center; margin-top:-6px;'>"
