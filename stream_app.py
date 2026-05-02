@@ -3,27 +3,9 @@ import streamlit.components.v1 as components
 from simulator import Logger, Compartment, Shelf, STATE_STOPPED, STATE_MOVING_UP, STATE_MOVING_DOWN
 import pandas as pd
 import time
-'''
-import threading
-import uvicorn
-import requests
-from streamlit_mic_recorder import mic_recorder
-'''
 
 st.set_page_config(page_title="Shelf Control", layout="wide")
 st.title("Motorised Shelf Dashboard")
-
-'''
-def _start_api():
-    uvicorn.run("api:app", host="0.0.0.0", port=8000, log_level="warning")
-
-if "api_started" not in st.session_state:
-    t = threading.Thread(target=_start_api, daemon=True)
-    t.start()
-    st.session_state.api_started = True
-
-API_URL = ""
-'''
 
 if 'shelf' not in st.session_state:
     com_1 = Compartment(1, weight=0.5)
