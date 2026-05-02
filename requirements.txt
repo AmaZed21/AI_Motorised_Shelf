@@ -1,3 +1,11 @@
 streamlit
 numpy
 pandas
+huggingface_hub
+fastapi
+pydantic
+uvicorn
+vosk
+streamlit-mic-recorder
+python-dotenv
+requests

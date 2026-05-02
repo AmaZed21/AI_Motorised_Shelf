@@ -3,9 +3,27 @@ import streamlit.components.v1 as components
 from simulator import Logger, Compartment, Shelf, STATE_STOPPED, STATE_MOVING_UP, STATE_MOVING_DOWN
 import pandas as pd
 import time
+'''
+import threading
+import uvicorn
+import requests
+from streamlit_mic_recorder import mic_recorder
+'''
 
 st.set_page_config(page_title="Shelf Control", layout="wide")
 st.title("Motorised Shelf Dashboard")
+
+'''
+def _start_api():
+    uvicorn.run("api:app", host="0.0.0.0", port=8000, log_level="warning")
+
+if "api_started" not in st.session_state:
+    t = threading.Thread(target=_start_api, daemon=True)
+    t.start()
+    st.session_state.api_started = True
+
+API_URL = ""
+'''
 
 if 'shelf' not in st.session_state:
     com_1 = Compartment(1, weight=0.5)
@@ -110,6 +128,46 @@ with col_vis:
                 f"</div>",
                 unsafe_allow_html=True
             )
+
+            cmd_input = st.text_input(
+                label="",
+                placeholder='e.g.  bring inhaler  |  put back keys  |  stop medicine  |  reset',
+                key="text_cmd",
+                label_visibility="collapsed"
+            )
+
+            if cmd_input:
+                raw = cmd_input.strip().lower()
+                executed = False
+                if raw == "reset":
+                    shelf.reset()
+                    for c in shelf.total_com:
+                        logger.log(c, 'COMMAND_RESET')
+                    executed = True
+                elif raw.startswith("bring "):
+                    item = raw[len("bring "):].strip()
+                    com = shelf.find_item(item)
+                    if com:
+                        com.move_down()
+                        logger.log(com, f'COMMAND_BRING: {item}')
+                        executed = True
+                elif raw.startswith("put back "):
+                    item = raw[len("put back "):].strip()
+                    com = shelf.find_item(item)
+                    if com:
+                        com.move_up()
+                        logger.log(com, f'COMMAND_PUT_BACK: {item}')
+                        executed = True
+                elif raw.startswith("stop "):
+                    item = raw[len("stop "):].strip()
+                    com = shelf.find_item(item)
+                    if com:
+                        com.stop()
+                        logger.log(com, f'COMMAND_STOP: {item}')
+                        executed = True
+                if executed:
+                    del st.session_state["text_cmd"]
+                    st.rerun()
 
 #Controls
 with col_ctrl:
