@@ -111,46 +111,6 @@ with col_vis:
                 unsafe_allow_html=True
             )
 
-            cmd_input = st.text_input(
-                label="",
-                placeholder='e.g.  bring inhaler  |  put back keys  |  stop medicine  |  reset',
-                key="text_cmd",
-                label_visibility="collapsed"
-            )
-
-            if cmd_input:
-                raw = cmd_input.strip().lower()
-                executed = False
-                if raw == "reset":
-                    shelf.reset()
-                    for c in shelf.total_com:
-                        logger.log(c, 'COMMAND_RESET')
-                    executed = True
-                elif raw.startswith("bring "):
-                    item = raw[len("bring "):].strip()
-                    com = shelf.find_item(item)
-                    if com:
-                        com.move_down()
-                        logger.log(com, f'COMMAND_BRING: {item}')
-                        executed = True
-                elif raw.startswith("put back "):
-                    item = raw[len("put back "):].strip()
-                    com = shelf.find_item(item)
-                    if com:
-                        com.move_up()
-                        logger.log(com, f'COMMAND_PUT_BACK: {item}')
-                        executed = True
-                elif raw.startswith("stop "):
-                    item = raw[len("stop "):].strip()
-                    com = shelf.find_item(item)
-                    if com:
-                        com.stop()
-                        logger.log(com, f'COMMAND_STOP: {item}')
-                        executed = True
-                if executed:
-                    del st.session_state["text_cmd"]
-                    st.rerun()
-
 #Controls
 with col_ctrl:
     st.subheader("Controls")
