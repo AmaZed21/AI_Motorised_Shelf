@@ -150,12 +150,14 @@ with col_vis:
                 f"</div>",
                 unsafe_allow_html=True
             )
+    
+    st.divider()
     st.text_input(
         label="",
         placeholder='Bring, Put back, Reset, Stop',
         key="text_cmd",
         label_visibility="collapsed",
-        on_change= handle_cmd   # fires when user presses Enter
+        on_change= handle_cmd 
     )
 
 
