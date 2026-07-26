@@ -358,6 +358,44 @@ class Voice:
                         text = result.get("text", "")
                         self.handle_command(text)
 
+#Logging data for ML model
+class SensorDataLogger:
+    """
+    Writes one labelled sensor-data row per compartment every 0.1 seconds.
+    This is separate from the dashboard event log.
+    """
+
+    def __init__(self, filename: str = "data/temp_sensor_data.csv"):
+        self.filename = filename
+        self.fields = [
+            "compartment_no",
+            "position_cm",
+            "speed_cm_s",
+            "motor_current_a",
+            "sensor_distance_cm",
+            "weight_kg",
+            "state",
+            "actual_condition",
+        ]
+
+        with open(self.filename, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=self.fields)
+            writer.writeheader()
+
+    def log_sample(self, compartment) -> None:
+        with open(self.filename, "a", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=self.fields)
+            writer.writerow({
+                "compartment_no": compartment.com_no,
+                "position_cm": round(compartment.position, 3),
+                "speed_cm_s": round(compartment.speed, 3),
+                "motor_current_a": round(compartment.motor_current, 3),
+                "sensor_distance_cm": round(compartment.sensor_distance, 3),
+                "weight_kg": round(compartment.weight, 3),
+                "state": compartment.state,
+                "actual_condition": compartment.label,
+            })
+
 #Execute commands
 async def process_command(shelf, com, command, logger):
     if command == 'up':

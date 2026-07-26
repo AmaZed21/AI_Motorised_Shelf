@@ -1,27 +1,60 @@
+import os
+import time
+import threading
 import streamlit as st
 import streamlit.components.v1 as components
+from simulator import Logger, SensorDataLogger, Compartment, Shelf, STATE_STOPPED, STATE_MOVING_UP, STATE_MOVING_DOWN, LABEL_MANUAL_STOP
 import pandas as pd
-import time
-from simulator import (
-    Logger, Compartment, Shelf,
-    STATE_STOPPED, STATE_MOVING_UP, STATE_MOVING_DOWN, STATE_FAULT,
-    LABEL_MANUAL_STOP,
-)
 
 st.set_page_config(page_title="Shelf Control", layout="wide")
 st.title("Motorised Shelf Dashboard")
 
-if 'shelf' not in st.session_state:
+#Logger for ML MODEL
+SAMPLE_INTERVAL_SECONDS = 0.1
+TEMP_SENSOR_CSV = "data/training_data.csv"
+
+def collect_sensor_data(shelf, sensor_logger, stop_event):
+    while not stop_event.is_set():
+        start_time = time.perf_counter()
+
+        shelf.update_all(SAMPLE_INTERVAL_SECONDS)
+
+        for compartment in shelf.total_com:
+            sensor_logger.log_sample(compartment)
+
+        elapsed = time.perf_counter() - start_time
+        stop_event.wait(max(0, SAMPLE_INTERVAL_SECONDS - elapsed))
+
+if "shelf" not in st.session_state:
+    os.makedirs("data", exist_ok=True)
+
     com_1 = Compartment(1, weight=0.5)
     com_2 = Compartment(2, weight=0.4)
     com_3 = Compartment(3)
+
     st.session_state.shelf = Shelf([com_1, com_2, com_3])
-    st.session_state.logger = Logger('data/logs.csv')
+
+    # Existing dashboard/event CSV: unchanged
+    st.session_state.logger = Logger("data/logs.csv")
+
+    # New temporary ML training-data CSV
+    st.session_state.sensor_logger = SensorDataLogger(TEMP_SENSOR_CSV)
+
+    st.session_state.sensor_stop_event = threading.Event()
+
+    st.session_state.sensor_thread = threading.Thread(
+        target=collect_sensor_data,
+        args=(
+            st.session_state.shelf,
+            st.session_state.sensor_logger,
+            st.session_state.sensor_stop_event,
+        ),
+        daemon=True,
+    )
+    st.session_state.sensor_thread.start()
 
 shelf  = st.session_state.shelf
 logger = st.session_state.logger
-
-shelf.update_all(0.1)
 
 def handle_cmd():
     raw = st.session_state.get("text_cmd", "").strip().lower()
