@@ -22,10 +22,15 @@ DIR_DOWN = "DOWN"
 STATE_STOPPED     = "STOPPED"
 STATE_MOVING_UP   = "MOVING_UP"
 STATE_MOVING_DOWN = "MOVING_DOWN"
+STATE_FAULT = "FAULT"
+
+LABEL_NORMAL = "normal"
+LABEL_OBSTRUCTION = "obstruction"
+LABEL_OVERLOAD = "overload"
+LABEL_MANUAL_STOP = "manual_stop"
 
 #Features of compartment
 class Compartment:
-    #Defaults
     MAX_SPEED = 7.0
     MIN_SPEED = 0.0
     MIN_HEIGHT = 0.0
@@ -33,85 +38,142 @@ class Compartment:
     MAX_WEIGHT = 1.0
     SENSOR_THRESHOLD = 2.0
 
-    def __init__(self, com_no: int = 1, weight: float = 0.0, contents: list = []) -> None:
-        self.com_no = com_no #store compartment number
-        self.contents = contents #items inside the compartment
-        self.position = 60.0 #Starting position (stowed)
-        self.speed = self.MIN_SPEED #Stopped
+    # Simulated electrical behaviour
+    IDLE_CURRENT_A = 0.10
+    RUN_CURRENT_A = 0.65
+    STALL_CURRENT_A = 3.20
+    OVERLOAD_CURRENT_A = 2.40
+    ACCELERATION = 2.50          # cm/s²
+    FAULT_DECELERATION = 8.00    # cm/s²
+    CURRENT_RISE_RATE = 5.00     # A/s
+
+    def __init__(self, com_no: int = 1, weight: float = 0.0, contents=None) -> None:
+        self.com_no = com_no
+        self.contents = contents or []
+        self.position = self.MAX_HEIGHT
+        self.speed = self.MIN_SPEED
         self.state = STATE_STOPPED
         self.direction = DIR_NONE
-        self.weight = weight if contents is not None else 0.0
+        self.weight = weight
         self.sensor_distance = 62.0
 
+        # Telemetry and ground-truth label for dataset generation
+        self.motor_current = self.IDLE_CURRENT_A
+        self.label = LABEL_NORMAL
+        self.fault_type = None
+        self.position_at_fault = None
+
     def move_up(self) -> None:
-        if (self.position < self.MAX_HEIGHT) and (self.state in (STATE_STOPPED, STATE_MOVING_DOWN)):
+        if self.fault_type is not None:
+            return
+
+        if self.position < self.MAX_HEIGHT and self.state in (
+            STATE_STOPPED,
+            STATE_MOVING_DOWN,
+        ):
             self.direction = DIR_UP
             self.state = STATE_MOVING_UP
-    
+
     def move_down(self) -> None:
-        if (self.position > self.MIN_HEIGHT) and (self.state in (STATE_STOPPED, STATE_MOVING_UP)):
+        if self.fault_type is not None:
+            return
+
+        if self.position > self.MIN_HEIGHT and self.state in (
+            STATE_STOPPED,
+            STATE_MOVING_UP,
+        ):
             self.direction = DIR_DOWN
             self.state = STATE_MOVING_DOWN
 
-    def stop(self) -> None:
-        if self.state != STATE_STOPPED:
-            self.state = STATE_STOPPED
-            self.direction = DIR_NONE
-            self.speed = self.MIN_SPEED
-        else:
-            print('Already stopped')
-    
-    def update(self, dt: float = 0.1) -> None: 
-        #Speed control when moving
-        if self.state in (STATE_MOVING_DOWN, STATE_MOVING_UP):
-            if self.MAX_SPEED > self.speed:
-                self.speed += 0.25
-                
-        #Calculate height when travelling upwards
+    def stop(self, label=LABEL_MANUAL_STOP) -> None:
+        self.state = STATE_STOPPED
+        self.direction = DIR_NONE
+        self.speed = self.MIN_SPEED
+        self.motor_current = self.IDLE_CURRENT_A
+        self.label = label
+
+    def inject_obstruction(self) -> None:
+        """Create a labelled physical jam while the shelf is moving."""
+        self.fault_type = LABEL_OBSTRUCTION
+        self.label = LABEL_OBSTRUCTION
+        self.sensor_distance = 0.5
+        self.position_at_fault = self.position
+
+    def inject_overload(self) -> None:
+        """Create a labelled excessive-load condition."""
+        self.fault_type = LABEL_OVERLOAD
+        self.label = LABEL_OVERLOAD
+        self.weight = self.MAX_WEIGHT + 1.0
+        self.position_at_fault = self.position
+
+    def clear_fault(self) -> None:
+        self.fault_type = None
+        self.label = LABEL_NORMAL
+        self.sensor_distance = self.position + 2.0
+        self.weight = min(self.weight, self.MAX_WEIGHT)
+        self.position_at_fault = None
+        self.speed = self.MIN_SPEED
+        self.motor_current = self.IDLE_CURRENT_A
+        self.state = STATE_STOPPED
+        self.direction = DIR_NONE
+
+    def _move_position(self, dt: float) -> None:
         if self.state == STATE_MOVING_UP:
             self.position += self.speed * dt
             self.sensor_distance += self.speed * dt
-            if (self.position >= self.MAX_HEIGHT - 1):
-                self.position = self.MAX_HEIGHT
-                self.stop()
 
-        #Calculate height when travelling downwards
-        if self.state == STATE_MOVING_DOWN:
+            if self.position >= self.MAX_HEIGHT:
+                self.position = self.MAX_HEIGHT
+                self.stop(label=LABEL_NORMAL)
+
+        elif self.state == STATE_MOVING_DOWN:
             self.position -= self.speed * dt
             self.sensor_distance -= self.speed * dt
-            if (self.position <= self.MIN_HEIGHT + 1):
-                self.position = self.MIN_HEIGHT
-                self.stop()
 
-        #Stop when weight exceeded
-        if (self.weight > self.MAX_WEIGHT) and (self.state in (STATE_MOVING_DOWN, STATE_MOVING_UP)):
-            self.stop()
-    
-        #stop if obstruction detected (ultrasonic sensor used)
-        if self.state == STATE_MOVING_DOWN and self.sensor_distance < self.SENSOR_THRESHOLD:
-            self.stop()
-            print('Obstruction detected, emergency stop')
-    
-    #Retrieve status of compartment
-    def print_status(self) -> None:
-        if len(self.contents) > 0:
-            print(f'''Compartment no. {self.com_no}
-Items: {', '.join(self.contents)}
-Weight: {self.weight: .2f} kg
-Height from ground: {self.position: .0f} cm
-Speed: {self.speed: .2f} cm/s
-State: {self.state}
-Direction: {self.direction}
-    ''')
-        else:
-            print(f'''Compartment no. {self.com_no}
-Items: Empty
-Weight: NA
-Height from ground: {self.position: .0f} cm
-Speed: {self.speed: .2f} cm/s
-State: {self.state}
-Direction: {self.direction}
-    ''')
+            if self.position <= self.MIN_HEIGHT:
+                self.position = self.MIN_HEIGHT
+                self.stop(label=LABEL_NORMAL)
+
+    def update(self, dt: float = 0.1) -> None:
+        moving = self.state in (STATE_MOVING_UP, STATE_MOVING_DOWN)
+
+        if not moving:
+            self.motor_current = max(
+                self.IDLE_CURRENT_A,
+                self.motor_current - self.CURRENT_RISE_RATE * dt,
+            )
+            return
+
+        # Fault path: current rises, speed collapses, position stays fixed.
+        if self.fault_type is not None:
+            target_current = (
+                self.STALL_CURRENT_A
+                if self.fault_type == LABEL_OBSTRUCTION
+                else self.OVERLOAD_CURRENT_A
+            )
+
+            self.motor_current = min(
+                target_current,
+                self.motor_current + self.CURRENT_RISE_RATE * dt,
+            )
+            self.speed = max(
+                self.MIN_SPEED,
+                self.speed - self.FAULT_DECELERATION * dt,
+            )
+
+            # The shelf is physically jammed: no further position movement.
+            if self.speed == self.MIN_SPEED:
+                self.state = STATE_FAULT
+                self.direction = DIR_NONE
+
+            return
+
+        # Normal motion path
+        self.speed = min(self.MAX_SPEED, self.speed + self.ACCELERATION * dt)
+        load_factor = self.weight / self.MAX_WEIGHT
+        self.motor_current = self.RUN_CURRENT_A + (0.35 * load_factor)
+        self.label = LABEL_NORMAL
+        self._move_position(dt)
 
 #Features of shelf
 class Shelf:
@@ -145,9 +207,9 @@ class Shelf:
     
     def reset(self):
         for c in self.total_com:
+            c.clear_fault()
             c.move_up()
-            c.sensor_distance = 62.0
-        print('Successfully reset')
+        print("System reset: faults cleared and shelves retracting")
     
     def find_item(self, item):
         try:
@@ -163,25 +225,41 @@ class Shelf:
 
 #Event logging
 class Logger:
-    def __init__(self, filename: str = 'logs.csv'):
+    def __init__(self, filename: str = "logs.csv"):
         self.filename = filename
-        self.fields = ['timestamp', 'compartment_no', 'items', 'position', 'state', 'event_type']
+        self.fields = [
+            "timestamp",
+            "compartment_no",
+            "items",
+            "position_cm",
+            "speed_cm_s",
+            "motor_current_a",
+            "weight_kg",
+            "sensor_distance_cm",
+            "state",
+            "label",
+            "event_type",
+        ]
 
-        #Create csv file
-        with open(self.filename, 'w', newline = '') as f:
-            writer = csv.DictWriter(f, fieldnames = self.fields)
+        with open(self.filename, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=self.fields)
             writer.writeheader()
-    
-    def log(self, compartment, event_type: str = 'TICK'):
-        with open(self.filename, 'a', newline = '') as f:
+
+    def log(self, compartment, event_type: str = "TICK"):
+        with open(self.filename, "a", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=self.fields)
             writer.writerow({
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'compartment_no': compartment.com_no,
-                'items': ', '.join(compartment.contents) if compartment.contents else 'Empty',
-                'position': compartment.position,
-                'state': compartment.state,
-                'event_type': event_type
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "compartment_no": compartment.com_no,
+                "items": ", ".join(compartment.contents) or "Empty",
+                "position_cm": round(compartment.position, 3),
+                "speed_cm_s": round(compartment.speed, 3),
+                "motor_current_a": round(compartment.motor_current, 3),
+                "weight_kg": round(compartment.weight, 3),
+                "sensor_distance_cm": round(compartment.sensor_distance, 3),
+                "state": compartment.state,
+                "label": compartment.label,
+                "event_type": event_type,
             })
 
 #Voice commands

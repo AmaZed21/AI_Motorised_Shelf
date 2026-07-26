@@ -1,8 +1,12 @@
 import streamlit as st
 import streamlit.components.v1 as components
-from simulator import Logger, Compartment, Shelf, STATE_STOPPED, STATE_MOVING_UP, STATE_MOVING_DOWN
 import pandas as pd
 import time
+from simulator import (
+    Logger, Compartment, Shelf,
+    STATE_STOPPED, STATE_MOVING_UP, STATE_MOVING_DOWN, STATE_FAULT,
+    LABEL_MANUAL_STOP,
+)
 
 st.set_page_config(page_title="Shelf Control", layout="wide")
 st.title("Motorised Shelf Dashboard")
@@ -169,9 +173,20 @@ with col_ctrl:
         st.warning("Select at least one compartment.")
     else:
         for com in selected_coms:
-            st.markdown(f"**#{com.com_no}** `{com.state}` `{com.position:.0f} cm` `{com.speed:.2f} cm/s`")
+            st.markdown(
+                f"### Compartment {com.com_no}\n"
+                f"{com.state} | {com.position:.0f} cm | "
+                f"{com.speed:.2f} cm/s"
+            )
 
-    st.divider()
+            # Add this directly below the current status line
+            st.caption(
+                f"Current: {com.motor_current:.2f} A | "
+                f"Speed: {com.speed:.2f} cm/s | "
+                f"Label: {com.label}"
+            )
+
+            st.divider()
 
     if st.button("⬆"):
         for com in selected_coms:
@@ -185,33 +200,43 @@ with col_ctrl:
 
     if st.button("⏹"):
         for com in selected_coms:
-            com.stop()
-            logger.log(com, 'COMMAND_STOP')
+            com.stop(label=LABEL_MANUAL_STOP)
+            logger.log(com, "COMMAND_STOP")
 
-    if st.button("Add Obstruction"):
+    st.divider()
+    if st.button("Create Obstruction", use_container_width=True):
         for com in selected_coms:
-            com.sensor_distance = 0.5
-            logger.log(com, 'OBSTRUCTION_INJECTED')
+            if com.state not in (STATE_MOVING_UP, STATE_MOVING_DOWN):
+                st.warning(
+                    f"Compartment {com.com_no} must be moving before "
+                    "an obstruction can be created."
+                )
+                continue
 
-    if st.button("Remove Obstruction"):
+            com.inject_obstruction()
+            logger.log(com, "SCENARIO_CREATED: OBSTRUCTION")
+
+    if st.button("Create Overload", use_container_width=True):
         for com in selected_coms:
-            com.sensor_distance = com.position + 2.0
-            logger.log(com, 'OBSTRUCTION_REMOVED')
+            if com.state not in (STATE_MOVING_UP, STATE_MOVING_DOWN):
+                st.warning(
+                    f"Compartment {com.com_no} must be moving before "
+                    "an overload can be created."
+                )
+                continue
 
-    if st.button("Inject Overload"):
+            com.inject_overload()
+            logger.log(com, "SCENARIO_CREATED: OVERLOAD")
+
+    if st.button("Clear Fault / Recover", use_container_width=True):
         for com in selected_coms:
-            com.weight = 2.0
-            logger.log(com, 'OVERLOAD_INJECTED')
+            com.clear_fault()
+            logger.log(com, "SCENARIO_CLEARED")
 
-    if st.button("Remove Overload"):
-        for com in selected_coms:
-            com.weight = 0.5
-            logger.log(com, 'OVERLOAD_REMOVED')
-
-    if st.button("Reset System"):
-        shelf.reset()
-        for c in shelf.total_com:
-            logger.log(c, 'RESET')
+        if st.button("Reset System"):
+            shelf.reset()
+            for c in shelf.total_com:
+                logger.log(c, 'RESET')
 
 #Logs
 with col_log:
