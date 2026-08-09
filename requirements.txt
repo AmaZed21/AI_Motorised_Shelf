@@ -9,3 +9,4 @@ vosk
 streamlit-mic-recorder
 python-dotenv
 requests
+joblib
