@@ -28,7 +28,7 @@ def collect_sensor_data(
 
         for compartment in shelf.total_com:
             # Random Forest reads current sensor values.
-            detected_fault = None
+            detected_fault = safety_monitor.check_compartment(compartment)
 
             # Keep the existing Logger system.
             if detected_fault is not None:
@@ -69,8 +69,8 @@ if "shelf" not in st.session_state:
         target=collect_sensor_data,
         args=(
             st.session_state.shelf,
-            st.session_state.logger,
             st.session_state.sensor_logger,
+            st.session_state.logger,         
             st.session_state.safety_monitor,
             st.session_state.sensor_stop_event,
         ),
@@ -295,10 +295,10 @@ with col_ctrl:
             com.clear_fault()
             logger.log(com, "SCENARIO_CLEARED")
 
-        if st.button("Reset System"):
-            shelf.reset()
-            for c in shelf.total_com:
-                logger.log(c, 'RESET')
+    if st.button("Reset System"):
+        shelf.reset()
+        for c in shelf.total_com:
+            logger.log(c, 'RESET')
 
 #Logs
 with col_log:
