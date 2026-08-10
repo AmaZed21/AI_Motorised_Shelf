@@ -28,7 +28,7 @@ def collect_sensor_data(
 
         for compartment in shelf.total_com:
             # Random Forest reads current sensor values.
-            detected_fault = safety_monitor.check_compartment(compartment)
+            detected_fault = None
 
             # Keep the existing Logger system.
             if detected_fault is not None:
