@@ -3,7 +3,7 @@ import time
 import threading
 import streamlit as st
 import streamlit.components.v1 as components
-from simulator import Logger, SensorDataLogger, Compartment, Shelf, STATE_STOPPED, STATE_MOVING_UP, STATE_MOVING_DOWN, LABEL_MANUAL_STOP
+from simulator import Logger, SensorDataLogger, Compartment, Shelf, ShelfSafetyMonitor, STATE_STOPPED, STATE_MOVING_UP, STATE_MOVING_DOWN, LABEL_MANUAL_STOP
 import pandas as pd
 
 st.set_page_config(page_title="Shelf Control", layout="wide")
@@ -13,13 +13,31 @@ st.title("Motorised Shelf Dashboard")
 SAMPLE_INTERVAL_SECONDS = 0.1
 TEMP_SENSOR_CSV = "data/training_data.csv"
 
-def collect_sensor_data(shelf, sensor_logger, stop_event):
+def collect_sensor_data(
+    shelf,
+    sensor_logger,
+    event_logger,
+    safety_monitor,
+    stop_event,
+):
     while not stop_event.is_set():
         start_time = time.perf_counter()
 
+        # Updates movement and current sensor values.
         shelf.update_all(SAMPLE_INTERVAL_SECONDS)
 
         for compartment in shelf.total_com:
+            # Random Forest reads current sensor values.
+            detected_fault = safety_monitor.check_compartment(compartment)
+
+            # Keep the existing Logger system.
+            if detected_fault is not None:
+                event_logger.log(
+                    compartment,
+                    f"ML_SAFETY_STOP: {detected_fault.upper()}",
+                )
+
+            # Keep logging samples for future ML training.
             sensor_logger.log_sample(compartment)
 
         elapsed = time.perf_counter() - start_time
@@ -37,7 +55,12 @@ if "shelf" not in st.session_state:
     # Existing dashboard/event CSV: unchanged
     st.session_state.logger = Logger("data/logs.csv")
 
-    # New temporary ML training-data CSV
+    st.session_state.safety_monitor = ShelfSafetyMonitor(
+        model_path="models/random_forest_model/random_forest.joblib",
+        confidence_threshold=0.60,
+        required_consecutive_predictions=1,
+    )
+
     st.session_state.sensor_logger = SensorDataLogger(TEMP_SENSOR_CSV)
 
     st.session_state.sensor_stop_event = threading.Event()
@@ -46,7 +69,9 @@ if "shelf" not in st.session_state:
         target=collect_sensor_data,
         args=(
             st.session_state.shelf,
+            st.session_state.logger,
             st.session_state.sensor_logger,
+            st.session_state.safety_monitor,
             st.session_state.sensor_stop_event,
         ),
         daemon=True,
@@ -55,6 +80,7 @@ if "shelf" not in st.session_state:
 
 shelf  = st.session_state.shelf
 logger = st.session_state.logger
+safety_monitor = st.session_state.safety_monitor
 
 def handle_cmd():
     raw = st.session_state.get("text_cmd", "").strip().lower()
@@ -120,6 +146,7 @@ with col_vis:
                 STATE_STOPPED: "#888888",
                 STATE_MOVING_UP: "#00cc44",
                 STATE_MOVING_DOWN: "#ff0000",
+                "FAULT": "#e5ff00",
             }.get(com.state, "#888888")
 
             border = "#ffffff" if st.session_state.get(f"com_selected_{com.com_no}", False) else "#444444"
@@ -245,10 +272,10 @@ with col_ctrl:
                     "an obstruction can be created."
                 )
                 continue
+            com.sensor_distance = 0.5
 
-            com.inject_obstruction()
             logger.log(com, "SCENARIO_CREATED: OBSTRUCTION")
-
+        
     if st.button("Create Overload", use_container_width=True):
         for com in selected_coms:
             if com.state not in (STATE_MOVING_UP, STATE_MOVING_DOWN):
@@ -257,8 +284,8 @@ with col_ctrl:
                     "an overload can be created."
                 )
                 continue
+            com.weight = com.MAX_WEIGHT + 1.0
 
-            com.inject_overload()
             logger.log(com, "SCENARIO_CREATED: OVERLOAD")
 
     if st.button("Clear Fault / Recover", use_container_width=True):

@@ -75,7 +75,7 @@ class ShelfSafetyMonitor:
         # Only perform ML classification while the shelf is moving.
         if compartment.state not in (STATE_MOVING_UP, STATE_MOVING_DOWN):
             self.danger_counts[compartment.com_no] = 0
-            return
+            return None
 
         sensor_row = self.build_sensor_row(compartment)
 
@@ -96,7 +96,7 @@ class ShelfSafetyMonitor:
             )
         else:
             self.danger_counts[compartment.com_no] = 0
-            return
+            return None
 
         if (
             self.danger_counts[compartment.com_no]
@@ -114,6 +114,10 @@ class ShelfSafetyMonitor:
                 f"Detected: {predicted_label} | "
                 f"Confidence: {confidence:.1%}"
             )
+
+            return predicted_label
+
+        return None
 
 #Features of compartment
 class Compartment:
