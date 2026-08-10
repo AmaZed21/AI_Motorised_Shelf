@@ -21,15 +21,6 @@ Install all dependencies with:
 pip install -r requirements.txt
 ```
 
-Dependencies:
-- `streamlit`
-- `numpy`
-- `pandas`
-- `vosk`
-- `sounddevice`
-- `queue`
-
-
 ## Vosk Model Setup (For backend simulation/NOT streamlit)
 
 1. Download a model from [https://alphacephei.com/vosk/models]
