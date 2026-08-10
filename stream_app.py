@@ -239,11 +239,13 @@ with col_ctrl:
                 f"{com.speed:.2f} cm/s"
             )
 
-            # Add this directly below the current status line
+            fault_status = com.fault_type if com.fault_type else "None"
+
             st.caption(
                 f"Current: {com.motor_current:.2f} A | "
                 f"Speed: {com.speed:.2f} cm/s | "
-                f"Label: {com.label}"
+                f"Label: {com.label} | "
+                f"Fault lock: {fault_status}"
             )
 
             st.divider()

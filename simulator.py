@@ -85,6 +85,14 @@ class ShelfSafetyMonitor:
         predicted_label = self.model.classes_[best_index]
         confidence = probabilities[best_index]
 
+        print(
+            f"ML check | Compartment {compartment.com_no} | "
+            f"Prediction: {predicted_label} | "
+            f"Confidence: {confidence:.1%} | "
+            f"Distance: {compartment.sensor_distance:.2f} | "
+            f"Weight: {compartment.weight:.2f}"
+        )
+
         dangerous_prediction = (
             predicted_label in self.DANGEROUS_LABELS
             and confidence >= self.confidence_threshold
