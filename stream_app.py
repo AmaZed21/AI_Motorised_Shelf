@@ -46,8 +46,8 @@ def collect_sensor_data(
 if "shelf" not in st.session_state:
     os.makedirs("data", exist_ok=True)
 
-    com_1 = Compartment(1, weight=0.5)
-    com_2 = Compartment(2, weight=0.4)
+    com_1 = Compartment(1, weight=0.2)
+    com_2 = Compartment(2, weight=0.1)
     com_3 = Compartment(3)
 
     st.session_state.shelf = Shelf([com_1, com_2, com_3])
@@ -57,8 +57,8 @@ if "shelf" not in st.session_state:
 
     st.session_state.safety_monitor = ShelfSafetyMonitor(
         model_path=MODEL_PATH,
-        confidence_threshold=0.60,
-        required_consecutive_predictions=1,
+        confidence_threshold=0.85,
+        required_consecutive_predictions=3,
     )
 
     st.session_state.sensor_logger = SensorDataLogger(TEMP_SENSOR_CSV)
