@@ -3,7 +3,7 @@ import time
 import threading
 import streamlit as st
 import streamlit.components.v1 as components
-from simulator import Logger, SensorDataLogger, Compartment, Shelf, ShelfSafetyMonitor, STATE_STOPPED, STATE_MOVING_UP, STATE_MOVING_DOWN, LABEL_MANUAL_STOP
+from simulator import Logger, SensorDataLogger, Compartment, Shelf, ShelfSafetyMonitor, STATE_STOPPED, STATE_MOVING_UP, STATE_MOVING_DOWN, LABEL_MANUAL_STOP, MODEL_PATH
 import pandas as pd
 
 st.set_page_config(page_title="Shelf Control", layout="wide")
@@ -56,7 +56,7 @@ if "shelf" not in st.session_state:
     st.session_state.logger = Logger("data/logs.csv")
 
     st.session_state.safety_monitor = ShelfSafetyMonitor(
-        model_path="models/random_forest_model/random_forest.joblib",
+        model_path=MODEL_PATH,
         confidence_threshold=0.60,
         required_consecutive_predictions=1,
     )
