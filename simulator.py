@@ -3,6 +3,8 @@ import csv
 from datetime import datetime
 import random
 import numpy as np
+import joblib
+import pandas as pd
 
 try:
     import vosk
@@ -28,6 +30,90 @@ LABEL_NORMAL = "normal"
 LABEL_OBSTRUCTION = "obstruction"
 LABEL_OVERLOAD = "overload"
 LABEL_MANUAL_STOP = "manual_stop"
+
+MODEL_PATH = "models/random_forest_model/random_forest.joblib"
+
+#Forest model
+class ShelfSafetyMonitor:
+    FEATURES = [
+        "position_cm",
+        "speed_cm_s",
+        "motor_current_a",
+        "sensor_distance_cm",
+        "weight_kg",
+    ]
+
+    DANGEROUS_LABELS = {
+        LABEL_OBSTRUCTION,
+        LABEL_OVERLOAD,
+    }
+
+    def __init__(
+        self,
+        model_path: str = MODEL_PATH,
+        confidence_threshold: float = 0.85,
+        required_consecutive_predictions: int = 1,
+    ):
+        self.model = joblib.load(model_path)
+
+        self.confidence_threshold = confidence_threshold
+        self.required_consecutive_predictions = required_consecutive_predictions
+
+        # Tracks repeated dangerous predictions per compartment.
+        self.danger_counts = {}
+
+    def build_sensor_row(self, compartment):
+        return pd.DataFrame([{
+            "position_cm": compartment.position,
+            "speed_cm_s": compartment.speed,
+            "motor_current_a": compartment.motor_current,
+            "sensor_distance_cm": compartment.sensor_distance,
+            "weight_kg": compartment.weight,
+        }])[self.FEATURES]
+
+    def check_compartment(self, compartment):
+        # Only perform ML classification while the shelf is moving.
+        if compartment.state not in (STATE_MOVING_UP, STATE_MOVING_DOWN):
+            self.danger_counts[compartment.com_no] = 0
+            return
+
+        sensor_row = self.build_sensor_row(compartment)
+
+        probabilities = self.model.predict_proba(sensor_row)[0]
+        best_index = probabilities.argmax()
+
+        predicted_label = self.model.classes_[best_index]
+        confidence = probabilities[best_index]
+
+        dangerous_prediction = (
+            predicted_label in self.DANGEROUS_LABELS
+            and confidence >= self.confidence_threshold
+        )
+
+        if dangerous_prediction:
+            self.danger_counts[compartment.com_no] = (
+                self.danger_counts.get(compartment.com_no, 0) + 1
+            )
+        else:
+            self.danger_counts[compartment.com_no] = 0
+            return
+
+        if (
+            self.danger_counts[compartment.com_no]
+            >= self.required_consecutive_predictions
+        ):
+            # The Random Forest decides to stop the compartment.
+            compartment.stop(label=predicted_label)
+
+            # Locks the compartment until the existing reset command is used.
+            compartment.fault_type = predicted_label
+            compartment.position_at_fault = compartment.position
+
+            print(
+                f"\nML SAFETY STOP | Compartment {compartment.com_no} | "
+                f"Detected: {predicted_label} | "
+                f"Confidence: {confidence:.1%}"
+            )
 
 #Features of compartment
 class Compartment:
@@ -93,14 +179,12 @@ class Compartment:
         self.label = label
 
     def inject_obstruction(self) -> None:
-        """Create a labelled physical jam while the shelf is moving."""
         self.fault_type = LABEL_OBSTRUCTION
         self.label = LABEL_OBSTRUCTION
         self.sensor_distance = 0.5
         self.position_at_fault = self.position
 
     def inject_overload(self) -> None:
-        """Create a labelled excessive-load condition."""
         self.fault_type = LABEL_OVERLOAD
         self.label = LABEL_OVERLOAD
         self.weight = self.MAX_WEIGHT + 1.0
@@ -174,6 +258,19 @@ class Compartment:
         self.motor_current = self.RUN_CURRENT_A + (0.35 * load_factor)
         self.label = LABEL_NORMAL
         self._move_position(dt)
+
+    def print_status(self) -> None:
+        print(
+            f"Compartment {self.com_no} | "
+            f"Items: {', '.join(self.contents) or 'Empty'} | "
+            f"Position: {self.position:.2f} cm | "
+            f"Speed: {self.speed:.2f} cm/s | "
+            f"Current: {self.motor_current:.2f} A | "
+            f"Weight: {self.weight:.2f} kg | "
+            f"Distance: {self.sensor_distance:.2f} cm | "
+            f"State: {self.state} | "
+            f"Label: {self.label}"
+        )
 
 #Features of shelf
 class Shelf:
@@ -408,25 +505,32 @@ async def process_command(shelf, com, command, logger):
         shelf.reset()
     elif command == 'block':
         com.sensor_distance = 0.5
+
     elif command == 'free':
-        com.sensor_distance = 62.0
-        if com.position != 60.0:
-            com.move_down()
+        com.sensor_distance = com.position + 2.0
+
+    elif command == 'overload':
+        com.weight = com.MAX_WEIGHT + 1.0
+
+    elif command == 'unload':
+        com.weight = min(com.weight, com.MAX_WEIGHT)
     else:
-        print('Invalid command')
+        print(r'com_num, down/up/stop/reset/block/free/overload/unload')
         return 
 
     logger.log(com, event_type=f'COMMAND_{command.upper()}')
     shelf.get_status()
 
 #Refresh comp_information every (ticks) seconds
-async def run_simulation(shelf, logger, ticks:float = 0.1):
+async def run_simulation(shelf, logger, safety_monitor, ticks: float = 0.1):
     #initial print
     shelf.get_status()
     was_moving = {c.com_no: False for c in shelf.total_com}
     
     while True:
         shelf.update_all(ticks)
+        for compartment in shelf.total_com:
+            safety_monitor.check_compartment(compartment)
 
         # Only print if any compartment is moving
         if any(c.state != STATE_STOPPED for c in shelf.total_com) or any(was_moving[c.com_no] and c.state == STATE_STOPPED 
@@ -462,7 +566,7 @@ async def manual_cycle(shelf, logger):
         #Get comp
         com = next((c for c in shelf.total_com if c.com_no == com_num), None)
         if com is None:
-                print("Invalid compartment number")
+                print("num, down/up/stop/reset/block/free/overload/unload")
                 continue
         
         await process_command(shelf, com, command, logger)
@@ -493,14 +597,20 @@ async def main():
     #Creating shelf
     shelf_1 = Shelf([com_1, com_2, com_3])
 
-    voice = Voice(shelf_1, model_path = 'models/vosk-model-small-en-us-0.15')
+    safety_monitor = ShelfSafetyMonitor(
+        model_path=MODEL_PATH,
+        confidence_threshold=0.60,
+        required_consecutive_predictions=1,
+    )
+
+    #voice = Voice(shelf_1, model_path = 'models/vosk-model-small-en-us-0.15')
 
     loop = asyncio.get_running_loop()
 
     await asyncio.gather(
-            run_simulation(shelf_1, logger),
+            run_simulation(shelf_1, logger, safety_monitor),
             manual_cycle(shelf_1, logger),
-            loop.run_in_executor(None, voice.listen_loop)
+            #loop.run_in_executor(None, voice.listen_loop)
         )
 
 if __name__ == '__main__':

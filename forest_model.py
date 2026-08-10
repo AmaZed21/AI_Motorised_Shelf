@@ -94,4 +94,4 @@ importance = pd.Series(
 
 print("\nFeature importance:")
 print(importance)
-joblib.dump(model, "models/shelf_fault_random_forest.joblib")
+joblib.dump(model, "models/random_forest_model/random_forest.joblib")
