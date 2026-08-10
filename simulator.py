@@ -31,7 +31,7 @@ LABEL_OBSTRUCTION = "obstruction"
 LABEL_OVERLOAD = "overload"
 LABEL_MANUAL_STOP = "manual_stop"
 
-MODEL_PATH = "models/random_forest_model/random_forest.joblib"
+MODEL_PATH = "random_forest_model/random_forest.joblib"
 
 #Forest model
 class ShelfSafetyMonitor:
